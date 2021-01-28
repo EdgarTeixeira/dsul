@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import NamedTuple
+from dataclasses import dataclass
 
 import numpy as np
 from joblib import Parallel, delayed
@@ -18,10 +19,14 @@ class IntervalType(Enum):
     right = 2
 
 
-class ConfidenceInterval(NamedTuple):
+@dataclass
+class ConfidenceInterval:
     lower: float
     upper: float
     alpha: float
+
+    def contains(self, value: float) -> bool:
+        return self.lower <= value <= self.upper
 
 
 def mean_ci(sample, alpha, std_dev=None, interval_type=IntervalType.symmetric):
@@ -66,7 +71,7 @@ def variance_ci(sample, alpha, interval_type=IntervalType.symmetric):
 
     lower_alpha, upper_alpha = _get_alphas(alpha, interval_type)
     dist = stats.chi2(df)
-    lower, upper = df * sample_var / dist.ppf([lower_alpha, upper_alpha])
+    lower, upper = df * sample_var / dist.ppf([upper_alpha, lower_alpha])
 
     return ConfidenceInterval(lower, upper, alpha)
 
@@ -162,8 +167,6 @@ class SimpleBootstrap:
                 ci[0] = -np.inf
             if upper_alpha == 1.0:
                 ci[1] = np.inf
-
-            raise NotImplementedError()
         else:
             raise NotImplementedError("Invalid Bootstrap CI method")
 
