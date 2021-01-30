@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import NamedTuple
 from dataclasses import dataclass
 
 import numpy as np
@@ -114,8 +113,8 @@ class SimpleBootstrap:
         parallel = Parallel(n_jobs=n_jobs)
         stat_func = delayed(self.resample)
 
-        self.bootstrap_samples_ = parallel(
-            stat_func() for it in range(iterations))
+        self.bootstrap_samples_ = np.asarray(
+            parallel(stat_func() for it in range(iterations)))
 
     def confidence_interval(self, alpha: float,
                             bootstrap_ci: BootstrapCI = BootstrapCI.percentile,
@@ -142,27 +141,32 @@ class SimpleBootstrap:
             z0 = std_norm.ppf((self.bootstrap_samples_ < self.theta).mean())
 
             # Acceleration Factor
-            jackknife_values = get_jackknife_distribution(self.sample, self.stats_function)
+            jackknife_values = get_jackknife_distribution(
+                self.sample, self.stats_function)
             jack_mean = jackknife_values.mean()
 
             num = np.power(jack_mean - jackknife_values, 3).sum()
-            den = 6 * np.power(np.square(jack_mean - jackknife_values).sum(), 3/2)
+            den = 6 * np.power(np.square(jack_mean -
+                                         jackknife_values).sum(), 3/2)
             a = num / den
 
             # Corrected percentiles
             if lower_alpha > 0.0:
-                corrected_lower = z0 + (z0 + z_lower) / (1 - a * (z0 + z_lower))
+                corrected_lower = z0 + (z0 + z_lower) / \
+                    (1 - a * (z0 + z_lower))
                 corrected_lower = std_norm.cdf(corrected_lower)
             else:
                 corrected_lower = lower_alpha
 
             if upper_alpha < 1.0:
-                corrected_upper = z0 + (z0 + z_upper) / (1 - a * (z0 + z_upper))
+                corrected_upper = z0 + (z0 + z_upper) / \
+                    (1 - a * (z0 + z_upper))
                 corrected_upper = std_norm.cdf(corrected_upper)
             else:
                 corrected_upper = upper_alpha
 
-            ci = np.percentile(self.bootstrap_samples_, [100 * corrected_lower, 100 * corrected_upper])
+            ci = np.percentile(self.bootstrap_samples_, [
+                               100 * corrected_lower, 100 * corrected_upper])
             if lower_alpha == 0.0:
                 ci[0] = -np.inf
             if upper_alpha == 1.0:
