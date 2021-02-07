@@ -1,4 +1,4 @@
-import eul.linear_model as lm
+import dsul.linear_model as lm
 import numpy as np
 
 

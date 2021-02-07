@@ -1,4 +1,4 @@
-import eul.confidence_intervals as ci
+import dsul.confidence_intervals as ci
 import numpy as np
 from scipy import stats
 
