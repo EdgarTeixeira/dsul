@@ -83,19 +83,38 @@ def stddev_ci(sample, alpha, interval_type=IntervalType.symmetric):
                               alpha)
 
 
-def get_jackknife_distribution(sample, stats_function, n_jobs=-1):
-    sample = np.asarray(sample)
-    idx = np.arange(sample.size)
+class SimpleJackknife:
+    def __init__(self, sample, stats_function) -> None:
+        self.sample = np.asarray(sample)
+        self.stats_function = stats_function
+        self.theta = stats_function(sample)
 
-    parallel = Parallel(n_jobs=n_jobs)
-    stats_func = delayed(stats_function)
+    def run(self, n_jobs: int = -1):
+        parallel = Parallel(n_jobs=n_jobs)
+        stat_func = delayed(self.stats_function)
 
-    jackknife_values = parallel(
-        stats_func(sample[idx != i])
-        for i in range(sample.size)
-    )
+        idx = np.arange(self.sample.size)
 
-    return np.asarray(jackknife_values)
+        jackknife_values = parallel(
+            stat_func(self.sample[idx != i])
+            for i in range(self.sample.size)
+        )
+
+        self.jackknife_samples_ = np.asarray(jackknife_values)
+
+    def bias(self):
+        delta = self.jackknife_samples_.mean() - self.theta
+        return (self.sample.size - 1) * delta
+
+    def bias_corrected(self):
+        A = self.sample.size * self.theta
+        B = (self.sample.size - 1) * self.jackknife_samples_.mean()
+
+        return A - B
+
+    def variance(self):
+        var = self.jackknife_samples_.var()
+        return var / (self.sample.size - 1)
 
 
 class SimpleBootstrap:
@@ -116,9 +135,19 @@ class SimpleBootstrap:
         self.bootstrap_samples_ = np.asarray(
             parallel(stat_func() for it in range(iterations)))
 
+    def bias(self):
+        return self.bootstrap_samples_.mean() - self.theta
+
+    def bias_corrected(self):
+        return 2 * self.theta - self.bootstrap_samples_.mean()
+
+    def variance(self):
+        return self.bootstrap_samples_.var(ddof=1)
+
     def confidence_interval(self, alpha: float,
                             bootstrap_ci: BootstrapCI = BootstrapCI.percentile,
-                            interval_type: IntervalType = IntervalType.symmetric) -> ConfidenceInterval:
+                            interval_type: IntervalType = IntervalType.symmetric,
+                            n_jobs: int = -1) -> ConfidenceInterval:
         lower_alpha, upper_alpha = _get_alphas(alpha, interval_type)
 
         if bootstrap_ci == BootstrapCI.percentile:
@@ -131,18 +160,19 @@ class SimpleBootstrap:
 
         elif bootstrap_ci == BootstrapCI.normal:
             z_values = stats.norm(0, 1).ppf([lower_alpha, upper_alpha])
-            ci = self.theta + self.bootstrap_samples_.std() * z_values
+            ci = self.theta + self.bootstrap_samples_.std(ddof=1) * z_values
 
         elif bootstrap_ci == BootstrapCI.bca:
             std_norm = stats.norm(0, 1)
             z_lower, z_upper = std_norm.ppf([lower_alpha, upper_alpha])
 
             # Bias Correction Factor
-            z0 = std_norm.ppf((self.bootstrap_samples_ < self.theta).mean())
+            z0 = std_norm.ppf((self.bootstrap_samples_ <= self.theta).mean())
 
-            # Acceleration Factor
-            jackknife_values = get_jackknife_distribution(
-                self.sample, self.stats_function)
+            # Acceleration Factor,
+            jack = SimpleJackknife(self.sample, self.stats_function)
+            jack.run(n_jobs=n_jobs)
+            jackknife_values = jack.jackknife_samples_
             jack_mean = jackknife_values.mean()
 
             num = np.power(jack_mean - jackknife_values, 3).sum()

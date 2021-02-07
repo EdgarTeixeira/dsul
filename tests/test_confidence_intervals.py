@@ -90,7 +90,9 @@ class TestAnalyticalMethods:
 
 def test_jackknife_distribution():
     sample = [1, 2, 3]
-    jackknife_values = ci.get_jackknife_distribution(sample, np.mean, n_jobs=1)
+    jack = ci.SimpleJackknife(sample, np.mean)
+    jack.run(n_jobs=1)
+    jackknife_values = jack.jackknife_samples_
     ground_truth = np.asarray([(2 + 3)/2, (1 + 3)/2, (1 + 2)/2])
 
     assert np.allclose(jackknife_values, ground_truth)
