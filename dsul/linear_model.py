@@ -1,7 +1,8 @@
+from typing import NamedTuple
 from warnings import warn
 
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import basinhopping, minimize
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils import check_consistent_length, check_scalar, check_X_y
 from sklearn.utils.validation import check_is_fitted
@@ -49,3 +50,49 @@ class LeastAbsoluteDeviation(BaseEstimator, RegressorMixin):
         if sample_weight is None:
             return np.mean(abs_residuals)
         return np.mean(abs_residuals * sample_weight)
+
+
+def __least_median_1d(x):
+    x = np.sort(x)
+    middle = x.size // 2
+
+    deltas = x[middle:] - x[:middle + 1]
+    idx = np.argmin(deltas)
+
+    return deltas[idx] / 2 + x[idx]
+
+
+def __lms_slope_cost_function(slope, x, y):
+    residuals = y - slope * x
+    intercept = __least_median_1d(residuals)
+
+    return np.median(np.abs(residuals - intercept))
+
+
+class LeastMedianSquaresResults(NamedTuple):
+    slope: float
+    intercept: float
+
+
+def least_median_squares(x, y, max_iter: int = 100):
+    # https://stackoverflow.com/questions/48013201/median-based-linear-regression-in-python
+    check_consistent_length(x, y)
+
+    if x.ndim == 2:
+        if x.shape[1] == 1:
+            x = x.flatten()
+        else:
+            raise ValueError('x must be 1-dimensional')
+
+    initial_guess = np.cov(x, y)[0, 1] / np.var(x)
+    out = basinhopping(__lms_slope_cost_function,
+                       x0=initial_guess, niter=max_iter,
+                       minimizer_kwargs={'args': (x, y)})
+
+    if not out.success:
+        warn(f"Optimization failed with message: {out.message}")
+
+    slope = out.x[0]
+    intercept = __least_median_1d(y - slope * x)
+
+    return LeastMedianSquaresResults(slope, intercept)
