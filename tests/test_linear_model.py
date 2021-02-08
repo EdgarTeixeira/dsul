@@ -19,3 +19,21 @@ def test_least_absolute_deviations():
 
     assert np.allclose(reg.coef_, [1, -3])
     assert np.allclose(reg.intercept_, np.pi)
+
+
+def test_least_median_squares():
+    X = np.random.normal(size=99)
+    y = 2 * X - 3
+
+    lms = lm.least_median_squares(X, y)
+
+    assert np.allclose(lms.slope, 2)
+    assert np.allclose(lms.intercept, -3)
+
+    X = np.random.normal(size=100)
+    y = 2 * X - 3
+
+    lms = lm.least_median_squares(X, y)
+
+    assert np.allclose(lms.slope, 2)
+    assert np.allclose(lms.intercept, -3)

@@ -56,7 +56,11 @@ def __least_median_1d(x):
     x = np.sort(x)
     middle = x.size // 2
 
-    deltas = x[middle:] - x[:middle + 1]
+    if x.size % 2 != 0:
+        deltas = x[middle:] - x[:middle + 1]
+    else:
+        deltas = x[middle:] - x[:middle]
+
     idx = np.argmin(deltas)
 
     return deltas[idx] / 2 + x[idx]
@@ -75,7 +79,6 @@ class LeastMedianSquaresResults(NamedTuple):
 
 
 def least_median_squares(x, y, max_iter: int = 100):
-    # https://stackoverflow.com/questions/48013201/median-based-linear-regression-in-python
     check_consistent_length(x, y)
 
     if x.ndim == 2:
@@ -89,8 +92,9 @@ def least_median_squares(x, y, max_iter: int = 100):
                        x0=initial_guess, niter=max_iter,
                        minimizer_kwargs={'args': (x, y)})
 
-    if not out.success:
-        warn(f"Optimization failed with message: {out.message}")
+    # TODO: Investigate this
+    # if not out.success:
+    #     warn(f"Optimization failed with message: {out.message}")
 
     slope = out.x[0]
     intercept = __least_median_1d(y - slope * x)
